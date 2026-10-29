@@ -228,21 +228,9 @@ async function openChat(otherUid, otherName) {
  try {
   const id = chatIdFor(currentUser.uid,otherUid);
   const ref = doc(db,"chats",id);
-  const existing = await getDoc(ref);
-  if (!existing.exists()) {
-   await setDoc(ref,{
-    participants:[currentUser.uid,otherUid],
-    lastMessage:"",
-    lastMessageAt:serverTimestamp(),
-    updatedAt:serverTimestamp()
-   });
-  }
-  activeChatId = id;
-  activeOther = {uid:otherUid,name:otherName};
-  $("chatTitle").textContent = "Chat with " + otherName;
-  show("chatBox",true);
-  if (messagesUnsub) messagesUnsub();
-  const mq = query(collection(db,"chats",id,"messages"),orderBy("createdAt","asc"));
+  await setDoc(ref,{
+  participants:[currentUser.uid,otherUid]
+},{merge:true});
   messagesUnsub = onSnapshot(mq,snap => {
    const root = $("messages");
    root.replaceChildren();
