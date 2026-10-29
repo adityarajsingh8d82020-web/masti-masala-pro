@@ -224,29 +224,54 @@ async function saveProfile() {
 }
 
 async function openChat(otherUid, otherName) {
- if (otherUid === currentUser.uid) return;
- try {
-  const id = chatIdFor(currentUser.uid,otherUid);
-  const ref = doc(db,"chats",id);
-  await setDoc(ref,{
-  participants:[currentUser.uid,otherUid]
-},{merge:true});
-  messagesUnsub = onSnapshot(mq,snap => {
-   const root = $("messages");
-   root.replaceChildren();
-   snap.forEach(item => {
-    const m = item.data();
-    const bubble = document.createElement("div");
-    bubble.className = "msg" + (m.senderId === currentUser.uid ? " mine" : "");
-    bubble.textContent = m.text || "";
-    root.appendChild(bubble);
-   });
-   root.scrollTop = root.scrollHeight;
-  },err => status("Messages error: " + err.message));
-  $("messageInput").focus();
- } catch(e) { status("Chat open error: " + e.message); }
-}
+  if (otherUid === currentUser.uid) return;
 
+  try {
+    const id = chatIdFor(currentUser.uid, otherUid);
+    const ref = doc(db, "chats", id);
+
+    await setDoc(ref, {
+      participants: [currentUser.uid, otherUid],
+      lastMessage: "",
+      lastMessageAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    activeChatId = id;
+    activeOther = { uid: otherUid, name: otherName };
+
+    $("chatTitle").textContent = "Chat with " + otherName;
+    show("chatBox", true);
+
+    if (messagesUnsub) messagesUnsub();
+
+    const mq = query(
+      collection(db, "chats", id, "messages"),
+      orderBy("createdAt", "asc")
+    );
+
+    messagesUnsub = onSnapshot(mq, snap => {
+      const root = $("messages");
+      root.replaceChildren();
+
+      snap.forEach(item => {
+        const m = item.data();
+        const bubble = document.createElement("div");
+        bubble.className =
+          "msg" + (m.senderId === currentUser.uid ? " mine" : "");
+        bubble.textContent = m.text || "";
+        root.appendChild(bubble);
+      });
+
+      root.scrollTop = root.scrollHeight;
+    }, err => status("Messages error: " + err.message));
+
+    $("messageInput").focus();
+
+  } catch (e) {
+    status("Chat open error: " + e.message);
+  }
+}
 $("signup").addEventListener("click",async()=>{
  if (busy) return;
  const email = $("email").value.trim(), password = $("password").value;
