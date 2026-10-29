@@ -1,140 +1,64 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#171126"><link rel="manifest" href="manifest.webmanifest">
-<title>Masti Masala Pro</title>
-<style>
-:root{--bg:#100c19;--panel:#1d172b;--panel2:#281d3c;--pink:#ff4fa3;--gold:#ffc85a;--text:#fff8ff;--muted:#b9adc8}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,#3a1d51 0,transparent 40%),var(--bg);color:var(--text);font:16px system-ui,Arial}
-header{display:flex;align-items:center;justify-content:space-between;padding:18px 16px;position:sticky;top:0;background:#100c19eF;backdrop-filter:blur(12px);z-index:2}
-.brand{font-weight:900;font-size:19px;letter-spacing:.2px}.brand span{color:var(--pink)}.coins{border:1px solid #554265;background:var(--panel);padding:8px 11px;border-radius:20px;color:var(--gold);font-weight:700}
-main{padding:8px 16px 92px;max-width:680px;margin:auto}.hero{padding:22px;border-radius:24px;background:linear-gradient(135deg,#4b1e65,#a32972);box-shadow:0 12px 36px #0005}
-h1{font-size:27px;margin:0 0 8px}.muted{color:var(--muted);line-height:1.5}.btn{border:0;border-radius:14px;padding:13px 16px;background:var(--pink);color:white;font-weight:800;font-size:15px;cursor:pointer}.btn.secondary{background:#382b4c;border:1px solid #59446d}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.section-title{margin:25px 0 12px;font-size:19px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{background:var(--panel);border:1px solid #382b49;border-radius:18px;padding:15px;min-width:0}.avatar{width:54px;height:54px;border-radius:18px;background:linear-gradient(135deg,#ff4fa3,#7c4dff);display:grid;place-items:center;font-size:25px;margin-bottom:10px}.online{font-size:12px;color:#79efb4}.small{font-size:13px}.field{width:100%;padding:13px;border:1px solid #51405f;border-radius:12px;background:#120d1d;color:white;margin:6px 0 12px}.nav{position:fixed;bottom:0;left:0;right:0;background:#171126f5;border-top:1px solid #382b49;display:flex;justify-content:space-around;padding:12px 5px calc(12px + env(safe-area-inset-bottom));z-index:3}.nav button{background:none;border:0;color:var(--muted);font-size:12px}.nav button b{display:block;font-size:20px;margin-bottom:3px}.nav button.active{color:var(--pink)}.hidden{display:none!important}.notice{background:#30243e;border:1px solid #6a4a7d;padding:12px;border-radius:12px;font-size:13px;line-height:1.5}.list-item{padding:13px 0;border-bottom:1px solid #382b49}.pill{font-size:11px;border-radius:99px;padding:4px 8px;background:#382b4c;color:#e8d9ff}
-</style>
-</head>
-<body>
-<header><div class="brand">🌶️ Masti Masala <span>Pro</span></div><div class="coins">🪙 <span id="coinCount">100</span></div></header>
-<main>
-<section id="authPanel" class="card" style="margin:8px 0 16px">
-  <h2 style="margin-top:0">🔐 Account Login</h2>
-  <p class="muted small">Firebase email/password account se sign in ya naya account banao.</p>
-  <label class="small" for="authName">Display name (new account)</label>
-  <input id="authName" class="field" placeholder="Your name" maxlength="40" autocomplete="nickname">
-  <label class="small" for="authEmail">Email</label>
-  <input id="authEmail" class="field" type="email" placeholder="you@example.com" autocomplete="email">
-  <label class="small" for="authPassword">Password (minimum 6 characters)</label>
-  <input id="authPassword" class="field" type="password" placeholder="Password" minlength="6" autocomplete="current-password">
-  <div class="row"><button class="btn" id="createAccountBtn">Create account</button><button class="btn secondary" id="loginBtn">Log in</button><button class="btn secondary hidden" id="logoutBtn">Log out</button></div>
-  <p id="authStatus" class="muted small" role="status" aria-live="polite">Firebase config set karne ke baad login available hoga.</p>
-</section>
-<section id="home">
-<div class="hero"><div class="pill">MEET • CHAT • CONNECT</div><h1 style="margin-top:12px">Naye dost, nayi masti! ✨</h1><p class="muted" style="color:#f6dff1">Discover people, chat and make new connections.</p><div class="row"><button class="btn" onclick="go('match')">🎲 Find a Match</button><button class="btn secondary" onclick="go('wallet')">🪙 My Wallet</button></div></div>
-<h2 class="section-title">People you may like</h2><div class="grid">
-<div class="card"><div class="avatar">🌸</div><b>Riya, 22</b><div class="online">● Online</div><p class="muted small">Music • Travel</p><button class="btn secondary" onclick="startChat('Riya')">Message</button></div>
-<div class="card"><div class="avatar">🎧</div><b>Arjun, 24</b><div class="online">● Online</div><p class="muted small">Gaming • Movies</p><button class="btn secondary" onclick="startChat('Arjun')">Message</button></div>
-<div class="card"><div class="avatar">🌙</div><b>Meera, 21</b><div class="online">● Online</div><p class="muted small">Art • Dance</p><button class="btn secondary" onclick="startChat('Meera')">Message</button></div>
-<div class="card"><div class="avatar">🎮</div><b>Kabir, 23</b><div class="online">● Online</div><p class="muted small">Games • Tech</p><button class="btn secondary" onclick="startChat('Kabir')">Message</button></div>
-</div><p class="notice" style="margin-top:16px">Starter preview: ye sample profiles hain. Real users aur live calls ke liye authentication, database aur calling provider configure karna hoga.</p>
-</section>
-<section id="match" class="hidden"><h2>🎲 Random Match</h2><div class="card"><div class="avatar">💫</div><h3 id="matchTitle">Ready to meet someone?</h3><p class="muted">Matching demo. Real matchmaking will be connected to the backend.</p><button class="btn" onclick="findMatch()">Find someone</button><button class="btn secondary" onclick="go('chat')" style="margin-left:6px">Open chat</button></div></section>
-<section id="chat" class="hidden"><h2>💬 Messages</h2><div class="card"><div class="list-item" onclick="openConversation('Riya')">🌸 <b>Riya</b><span class="muted small"> — Tap to open demo chat</span></div><div class="list-item" onclick="openConversation('Arjun')">🎧 <b>Arjun</b><span class="muted small"> — Tap to open demo chat</span></div><div id="conversation" class="hidden"><h3 id="chatName">Chat</h3><div id="messages" class="muted small">This is a local demo conversation.</div><input id="messageInput" class="field" placeholder="Type a message…"><button class="btn" onclick="sendMessage()">Send</button></div></div></section>
-<section id="wallet" class="hidden"><h2>🪙 Wallet & Gifts</h2><div class="card"><p class="muted">Demo coin balance</p><h1>🪙 <span id="walletCoins">100</span></h1><div class="notice">Coins are demo-only and have no cash value. Real recharge/payments need a secure backend and approved payment setup.</div><h3>Send a gift (demo)</h3><div class="row"><button class="btn secondary" onclick="gift('🌹',10)">🌹 Rose · 10</button><button class="btn secondary" onclick="gift('💎',25)">💎 Diamond · 25</button><button class="btn secondary" onclick="gift('🎁',50)">🎁 Gift · 50</button></div><p id="giftStatus" class="muted small"></p></div></section>
-<section id="profile" class="hidden"><h2>👤 Profile</h2><div class="card"><div class="avatar">🙂</div><label class="small">Display name</label><input id="displayName" class="field" value="" maxlength="40"><label class="small">About me</label><input id="about" class="field" placeholder="A little about you" maxlength="120"><button class="btn" onclick="saveProfile()">Save profile</button><p id="profileStatus" class="muted small"></p></div><h3>Safety</h3><div class="card"><button class="btn secondary" onclick="alert('Demo only: reporting will be sent to moderation after backend setup.')">Report a user</button> <button class="btn secondary" onclick="alert('Demo only: blocking will be connected to backend.')">Block user</button><p class="muted small">Real user safety and moderation must be enabled before public launch.</p></div></section>
-<section id="admin" class="hidden"><h2>🛡️ Admin panel preview</h2><div class="notice">This preview is not protected. Do not use it to manage real users. A production admin panel must require server-verified admin roles.</div><div class="grid" style="margin-top:12px"><div class="card"><div class="muted small">Users</div><h2>—</h2></div><div class="card"><div class="muted small">Open reports</div><h2>—</h2></div></div><div class="card" style="margin-top:12px"><b>Planned controls</b><p class="muted small">User review • Reports • Account suspension • Coin ledger • App configuration</p></div></section>
-</main>
-<nav class="nav"><button class="active" data-page="home" onclick="go('home')"><b>⌂</b>Home</button><button data-page="match" onclick="go('match')"><b>🎲</b>Match</button><button data-page="chat" onclick="go('chat')"><b>💬</b>Chat</button><button data-page="wallet" onclick="go('wallet')"><b>🪙</b>Wallet</button><button data-page="profile" onclick="go('profile')"><b>👤</b>Profile</button></nav>
-<script>
-let coins=100, activeChat='';
-function go(page){document.querySelectorAll('main section').forEach(s=>s.classList.add('hidden'));document.getElementById(page).classList.remove('hidden');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));window.scrollTo(0,0)}
-function updateCoins(){document.getElementById('coinCount').textContent=coins;document.getElementById('walletCoins').textContent=coins}
-function findMatch(){const names=['A new friend is waiting!','You found a match (demo)!','Try again to meet someone new!'];document.getElementById('matchTitle').textContent=names[Math.floor(Math.random()*names.length)]}
-function startChat(name){go('chat');openConversation(name)}
-function openConversation(name){activeChat=name;document.getElementById('conversation').classList.remove('hidden');document.getElementById('chatName').textContent='Chat with '+name;document.getElementById('messages').textContent='Conversation with '+name+' (local demo).'}
-function sendMessage(){const el=document.getElementById('messageInput');if(!el.value.trim())return;const p=document.createElement('p');p.textContent='You: '+el.value;document.getElementById('messages').appendChild(p);el.value=''}
-function gift(emoji,cost){if(coins<cost){document.getElementById('giftStatus').textContent='Not enough demo coins.';return}coins-=cost;updateCoins();document.getElementById('giftStatus').textContent=emoji+' Gift sent in demo!'}
-function saveProfile(){document.getElementById('profileStatus').textContent='Saved on this screen only. Backend save is not configured.'}
-if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
-</script>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
 
-const statusEl = document.getElementById('authStatus');
-const emailEl = document.getElementById('authEmail');
-const passwordEl = document.getElementById('authPassword');
-const nameEl = document.getElementById('authName');
-const createBtn = document.getElementById('createAccountBtn');
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-let auth, db, currentUser = null;
-function status(message, isError=false) { statusEl.textContent = message; statusEl.style.color = isError ? '#ff9aa8' : ''; }
-function configIsPlaceholder() { return !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('YOUR_') || firebaseConfig.apiKey.includes('PASTE_') || firebaseConfig.projectId.includes('YOUR_') || firebaseConfig.projectId.includes('PASTE_'); }
-if (configIsPlaceholder()) {
-  status('Pehle firebase-config.js mein Firebase Console se apni Web App config paste karo.');
-  createBtn.disabled = loginBtn.disabled = true;
-  createBtn.style.opacity = loginBtn.style.opacity = '.55';
-} else {
-  const app = initializeApp(firebaseConfig);
-  auth = getAuth(app); db = getFirestore(app);
-  createBtn.addEventListener('click', async () => {
-    const email=emailEl.value.trim(), password=passwordEl.value, displayName=nameEl.value.trim();
-    if (!displayName) return status('Naye account ke liye display name bharo.', true);
-    if (!email || password.length < 6) return status('Valid email aur kam-se-kam 6 character password bharo.', true);
-    createBtn.disabled=true;
-    try {
-      const cred = await createUserWithEmailAndPassword(auth,email,password);
-      if (displayName) await updateProfile(cred.user,{displayName});
-      await setDoc(doc(db,'users',cred.user.uid), {displayName, email:cred.user.email, bio:'', createdAt:serverTimestamp(), updatedAt:serverTimestamp()});
-      status('Account ban gaya aur profile Firestore mein save ho gayi.');
-    } catch(e) { status(readableError(e),true); }
-    finally { createBtn.disabled=false; }
-  });
-  loginBtn.addEventListener('click', async () => {
-    const email=emailEl.value.trim(), password=passwordEl.value;
-    if (!email || !password) return status('Email aur password bharo.',true);
-    loginBtn.disabled=true;
-    try {
-      const cred=await signInWithEmailAndPassword(auth,email,password);
-      const ref=doc(db,'users',cred.user.uid), snap=await getDoc(ref);
-      if (!snap.exists()) await setDoc(ref,{displayName:cred.user.displayName || 'User',email:cred.user.email,bio:'',createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
-      status('Login successful: '+(cred.user.displayName || cred.user.email));
-    } catch(e) { status(readableError(e),true); }
-    finally { loginBtn.disabled=false; }
-  });
-  logoutBtn.addEventListener('click', async()=>{try{await signOut(auth);status('Logout ho gaya.')}catch(e){status(readableError(e),true)}});
-  onAuthStateChanged(auth, async user => {
-    currentUser=user;
-    createBtn.classList.toggle('hidden',!!user); loginBtn.classList.toggle('hidden',!!user); logoutBtn.classList.toggle('hidden',!user);
-    if(user){
-      status('Logged in: '+(user.displayName || user.email));
-      const ref=doc(db,'users',user.uid), snap=await getDoc(ref);
-      if(snap.exists()){
-        const data=snap.data();
-        document.getElementById('displayName').value=data.displayName || user.displayName || '';
-        document.getElementById('about').value=data.bio || '';
+    match /users/{userId} {
+      allow read, create, update, delete:
+        if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    match /publicProfiles/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'bio', 'updatedAt'
+        ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 40
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 120;
+      allow delete: if false;
+    }
+
+    match /chats/{chatId} {
+      allow create: if request.auth != null
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.auth.uid in request.resource.data.participants;
+
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.participants
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt']);
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function isParticipant() {
+          return request.auth != null
+            && request.auth.uid in
+              get(/databases/$(database)/documents/chats/$(chatId))
+                .data.participants;
+        }
+
+        allow read: if isParticipant();
+
+        allow create: if isParticipant()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000
+          && request.resource.data.createdAt == request.time;
+
+        allow update, delete: if false;
       }
     }
-  });
-  window.saveProfile = async function(){
-    if(!currentUser){document.getElementById('profileStatus').textContent='Profile save karne se pehle login karo.';return;}
-    const displayName=document.getElementById('displayName').value.trim();
-    const bio=document.getElementById('about').value.trim();
-    if(!displayName){document.getElementById('profileStatus').textContent='Display name zaroori hai.';return;}
-    try{
-      await setDoc(doc(db,'users',currentUser.uid),{displayName,bio,email:currentUser.email,updatedAt:serverTimestamp()},{merge:true});
-      await updateProfile(currentUser,{displayName});
-      document.getElementById('profileStatus').textContent='Profile Firebase mein save ho gayi.';
-    }catch(e){document.getElementById('profileStatus').textContent=readableError(e);}
-  };
+  }
 }
-function readableError(e){
-  const map={ 'auth/email-already-in-use':'Is email ka account pehle se hai. Log in karo.', 'auth/invalid-email':'Email address sahi nahi hai.', 'auth/weak-password':'Password kam-se-kam 6 characters ka rakho.', 'auth/invalid-credential':'Email ya password galat hai.', 'auth/network-request-failed':'Internet connection check karo.', 'permission-denied':'Firestore rules ne request block ki. Rules check karne honge.' };
-  return map[e?.code] || (e?.message || 'Error aaya. Dobara try karo.');
-}
-</script>
-
-</body></html>
