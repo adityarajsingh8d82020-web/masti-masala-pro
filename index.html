@@ -116,6 +116,7 @@ let localStream = null;
 let activeCallRef = null;
 let activeCallRole = null;
 let remoteDescriptionSet = false;
+let pendingRemoteCandidates = [];
 let activeChatId = null;
 let activeOther = null;
 let busy = false;
@@ -191,6 +192,7 @@ async function endVideoCall(updateServer = true) {
  activeCallRef = null;
  activeCallRole = null;
  remoteDescriptionSet = false;
+ pendingRemoteCandidates = [];
  if (updateServer && oldRef) {
   try { await updateDoc(oldRef,{status:"ended",endedAt:serverTimestamp()}); }
   catch(e) { console.warn("Call end update:",e.message); }
@@ -222,6 +224,15 @@ async function preparePeer(callRef, role) {
  peer.ontrack = event => {
   $("remoteVideo").srcObject = event.streams[0];
   showCallStage(true);
+  status("Remote video received.");
+ };
+ peer.onconnectionstatechange = () => {
+  if (!peer) return;
+  const state = peer.connectionState;
+  if (state === "connected") status("Video call connected.");
+  else if (state === "connecting") status("Connecting video...");
+  else if (state === "failed") status("Video connection failed. Network may need TURN relay.");
+  else if (state === "disconnected") status("Video connection interrupted. Checking network...");
  };
  peer.onicecandidate = async event => {
   if (!event.candidate || !activeCallRef) return;
@@ -233,12 +244,26 @@ async function preparePeer(callRef, role) {
  showCallStage(true);
 }
 
+async function flushPendingRemoteCandidates() {
+ if (!peer || !remoteDescriptionSet) return;
+ const queued = pendingRemoteCandidates.splice(0);
+ for (const candidate of queued) {
+  try { await peer.addIceCandidate(new RTCIceCandidate(candidate)); }
+  catch(e) { console.warn("Queued ICE candidate:",e.message); }
+ }
+}
+
 function watchRemoteCandidates(callRef, remoteSide) {
  stopCandidateListener();
  candidateUnsub = onSnapshot(collection(db,"chats",activeChatId,"calls",callRef.id,remoteSide),snap => {
   snap.docChanges().forEach(async change => {
-   if (change.type !== "added" || !peer || !remoteDescriptionSet) return;
-   try { await peer.addIceCandidate(new RTCIceCandidate(change.doc.data())); }
+   if (change.type !== "added" || !peer) return;
+   const candidate = change.doc.data();
+   if (!remoteDescriptionSet) {
+    pendingRemoteCandidates.push(candidate);
+    return;
+   }
+   try { await peer.addIceCandidate(new RTCIceCandidate(candidate)); }
    catch(e) { console.warn("ICE candidate:",e.message); }
   });
  },err => status("Video connection error: " + err.message));
@@ -270,6 +295,7 @@ async function startVideoCall() {
     try {
      await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
      remoteDescriptionSet = true;
+     await flushPendingRemoteCandidates();
      watchRemoteCandidates(ref,"calleeCandidates");
      status("Video call connected.");
    } catch(e) { status("Answer error: " + e.message); }
@@ -308,6 +334,7 @@ async function answerVideoCall(callId) {
   await preparePeer(ref,"callee");
   await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
   remoteDescriptionSet = true;
+  await flushPendingRemoteCandidates();
   watchRemoteCandidates(ref,"callerCandidates");
   const answer = await peer.createAnswer();
   await peer.setLocalDescription(answer);
