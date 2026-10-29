@@ -203,7 +203,20 @@ async function preparePeer(callRef, role) {
  });
  activeCallRef = callRef;
  activeCallRole = role;
- localStream = await navigator.mediaDevices.getUserMedia({audio:true,video:true});
+
+ // If another app is using the microphone, continue with video-only.
+ try {
+  localStream = await navigator.mediaDevices.getUserMedia({audio:true,video:true});
+ } catch(audioVideoError) {
+  try {
+   localStream = await navigator.mediaDevices.getUserMedia({audio:false,video:true});
+   status("Camera ready. Microphone busy/blocked, so call will be video-only.");
+  } catch(videoError) {
+   peer.close();
+   peer = null;
+   throw new Error("Camera unavailable. Close Instagram/other camera apps and allow camera permission.");
+  }
+ }
  $("localVideo").srcObject = localStream;
  localStream.getTracks().forEach(track => peer.addTrack(track,localStream));
  peer.ontrack = event => {
