@@ -220,6 +220,18 @@ async function preparePeer(callRef, role) {
   }
  }
  $("localVideo").srcObject = localStream;
+ $("localVideo").muted = true;
+ $("localVideo").playsInline = true;
+ $("localVideo").autoplay = true;
+ $("localVideo").play().catch(() => {
+  status("Camera stream ready. Tap your video preview if it stays black.");
+ });
+ const videoTrack = localStream.getVideoTracks()[0];
+ if (videoTrack) {
+  videoTrack.onended = () => status("Camera video track stopped. Check camera permission and try again.");
+  videoTrack.onmute = () => status("Camera is temporarily muted.");
+  videoTrack.onunmute = () => status("Your camera is active.");
+ }
  localStream.getTracks().forEach(track => peer.addTrack(track,localStream));
  peer.ontrack = event => {
   const remoteVideo = $("remoteVideo");
