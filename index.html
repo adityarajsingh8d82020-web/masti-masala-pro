@@ -222,9 +222,32 @@ async function preparePeer(callRef, role) {
  $("localVideo").srcObject = localStream;
  localStream.getTracks().forEach(track => peer.addTrack(track,localStream));
  peer.ontrack = event => {
-  $("remoteVideo").srcObject = event.streams[0];
+  const remoteVideo = $("remoteVideo");
+  let incomingStream = event.streams && event.streams[0];
+  if (!incomingStream) {
+   incomingStream = remoteVideo.srcObject instanceof MediaStream
+    ? remoteVideo.srcObject
+    : new MediaStream();
+   if (!incomingStream.getTracks().some(track => track.id === event.track.id)) {
+    incomingStream.addTrack(event.track);
+   }
+  }
+  remoteVideo.srcObject = incomingStream;
+  remoteVideo.playsInline = true;
+  remoteVideo.autoplay = true;
   showCallStage(true);
-  status("Remote video received.");
+  event.track.onunmute = () => {
+   remoteVideo.play().catch(() => {});
+   status(event.track.kind === "video" ? "Remote video track active." : "Remote audio track active.");
+  };
+  remoteVideo.play().then(() => {
+   status("Remote media received. Waiting for video frame...");
+  }).catch(() => {
+   status("Remote video received. Tap the video once if playback is blocked.");
+  });
+  remoteVideo.onloadeddata = () => {
+   status("Remote video frame received.");
+  };
  };
  peer.onconnectionstatechange = () => {
   if (!peer) return;
