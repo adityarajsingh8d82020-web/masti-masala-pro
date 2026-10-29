@@ -24,7 +24,7 @@ button:disabled{opacity:.5}
 .user{display:flex;align-items:center;gap:10px}
 .avatar{width:44px;height:44px;flex-shrink:0;border-radius:50%;background:#ff70bb;color:#241027;display:grid;place-items:center;font-weight:bold}
 .user button{width:auto;margin-left:auto}
-#messages{height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+#videoStage{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}#videoStage video{width:100%;min-height:120px;background:#08070d;border-radius:12px;object-fit:cover}#callControls{display:flex;gap:8px;flex-wrap:wrap}#callControls button{flex:1;min-width:110px}#messages{height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
 .msg{background:#39314d;padding:10px 12px;border-radius:12px;max-width:85%;overflow-wrap:anywhere}
 .msg.mine{align-self:flex-end;background:#a84c88}
 .hidden{display:none!important}
@@ -69,6 +69,8 @@ button:disabled{opacity:.5}
 
 <div id="chatBox" class="card hidden">
 <h2 id="chatTitle">Chat</h2>
+<div id="callControls"><button id="startCall" type="button">📹 Video Call</button><button id="acceptCall" class="secondary hidden" type="button">Answer Call</button><button id="endCall" class="secondary hidden" type="button">End Call</button></div>
+<div id="videoStage" class="hidden"><video id="remoteVideo" autoplay playsinline></video><video id="localVideo" autoplay muted playsinline></video></div>
 <div id="messages"></div>
 <form id="messageForm" class="row">
 <input id="messageInput" maxlength="1000" placeholder="Write a message..." autocomplete="off" required>
@@ -106,6 +108,14 @@ let currentUser = null;
 let peopleUnsub = null;
 let chatsUnsub = null;
 let messagesUnsub = null;
+let incomingCallsUnsub = null;
+let callDocUnsub = null;
+let candidateUnsub = null;
+let peer = null;
+let localStream = null;
+let activeCallRef = null;
+let activeCallRole = null;
+let remoteDescriptionSet = false;
 let activeChatId = null;
 let activeOther = null;
 let busy = false;
@@ -126,6 +136,12 @@ function stopListeners() {
  if (peopleUnsub) peopleUnsub();
  if (chatsUnsub) chatsUnsub();
  if (messagesUnsub) messagesUnsub();
+ if (incomingCallsUnsub) incomingCallsUnsub();
+ if (callDocUnsub) callDocUnsub();
+ if (candidateUnsub) candidateUnsub();
+ incomingCallsUnsub = null;
+ callDocUnsub = null;
+ candidateUnsub = null;
 
  peopleUnsub = null;
  chatsUnsub = null;
@@ -134,11 +150,175 @@ function stopListeners() {
 
 function closeChat() {
  if (messagesUnsub) messagesUnsub();
+ if (incomingCallsUnsub) incomingCallsUnsub();
+ incomingCallsUnsub = null;
+ endVideoCall(false);
  messagesUnsub = null;
  activeChatId = null;
  activeOther = null;
  $("messages").replaceChildren();
  show("chatBox",false);
+}
+
+
+function showCallStage(yes) {
+ $("videoStage").classList.toggle("hidden", !yes);
+ $("endCall").classList.toggle("hidden", !yes);
+ $("startCall").classList.toggle("hidden", yes);
+}
+
+function stopCandidateListener() {
+ if (candidateUnsub) candidateUnsub();
+ candidateUnsub = null;
+}
+
+async function endVideoCall(updateServer = true) {
+ const oldRef = activeCallRef;
+ if (callDocUnsub) callDocUnsub();
+ callDocUnsub = null;
+ stopCandidateListener();
+ if (peer) {
+  peer.ontrack = null;
+  peer.onicecandidate = null;
+  peer.close();
+ }
+ peer = null;
+ if (localStream) localStream.getTracks().forEach(track => track.stop());
+ localStream = null;
+ $("localVideo").srcObject = null;
+ $("remoteVideo").srcObject = null;
+ showCallStage(false);
+ activeCallRef = null;
+ activeCallRole = null;
+ remoteDescriptionSet = false;
+ if (updateServer && oldRef) {
+  try { await updateDoc(oldRef,{status:"ended",endedAt:serverTimestamp()}); }
+  catch(e) { console.warn("Call end update:",e.message); }
+ }
+}
+
+async function preparePeer(callRef, role) {
+ peer = new RTCPeerConnection({
+  iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+ });
+ activeCallRef = callRef;
+ activeCallRole = role;
+ localStream = await navigator.mediaDevices.getUserMedia({audio:true,video:true});
+ $("localVideo").srcObject = localStream;
+ localStream.getTracks().forEach(track => peer.addTrack(track,localStream));
+ peer.ontrack = event => {
+  $("remoteVideo").srcObject = event.streams[0];
+  showCallStage(true);
+ };
+ peer.onicecandidate = async event => {
+  if (!event.candidate || !activeCallRef) return;
+  const side = activeCallRole === "caller" ? "callerCandidates" : "calleeCandidates";
+  try {
+   await addDoc(collection(db,"chats",activeChatId,"calls",activeCallRef.id,side),event.candidate.toJSON());
+  } catch(e) { status("Video call ICE error: " + e.message); }
+ };
+ showCallStage(true);
+}
+
+function watchRemoteCandidates(callRef, remoteSide) {
+ stopCandidateListener();
+ candidateUnsub = onSnapshot(collection(db,"chats",activeChatId,"calls",callRef.id,remoteSide),snap => {
+  snap.docChanges().forEach(async change => {
+   if (change.type !== "added" || !peer || !remoteDescriptionSet) return;
+   try { await peer.addIceCandidate(new RTCIceCandidate(change.doc.data())); }
+   catch(e) { console.warn("ICE candidate:",e.message); }
+  });
+ },err => status("Video connection error: " + err.message));
+}
+
+async function startVideoCall() {
+ if (!currentUser || !activeChatId || !activeOther || peer) return;
+ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  return status("Video call ke liye browser permission aur HTTPS zaroori hai.");
+ }
+ try {
+  status("Camera/microphone permission allow karo...");
+  const ref = doc(collection(db,"chats",activeChatId,"calls"));
+  await preparePeer(ref,"caller");
+  const offer = await peer.createOffer();
+  await peer.setLocalDescription(offer);
+  await setDoc(ref,{
+   callerId:currentUser.uid,
+   calleeId:activeOther.uid,
+   participants:[currentUser.uid,activeOther.uid],
+   offer:{type:offer.type,sdp:offer.sdp},
+   status:"ringing",
+   createdAt:serverTimestamp()
+  });
+  $("acceptCall").classList.add("hidden");
+  callDocUnsub = onSnapshot(ref,async snap => {
+   if (!snap.exists()) return;
+   const data = snap.data();
+   if (data.status === "ended" || data.status === "rejected") {
+    await endVideoCall(false);
+    status("Video call ended.");
+    return;
+   }
+   if (data.answer && peer && !remoteDescriptionSet) {
+    try {
+     await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+     remoteDescriptionSet = true;
+     watchRemoteCandidates(ref,"calleeCandidates");
+     status("Video call connected.");
+   } catch(e) { status("Answer error: " + e.message); }
+   }
+  },err => status("Call signal error: " + err.message));
+  watchIncomingCalls();
+  status("Calling " + activeOther.name + "... Doosre user ko chat kholkar Answer Call dabana hoga.");
+ } catch(e) {
+  await endVideoCall(false);
+  status("Video call start error: " + e.message);
+ }
+}
+
+async function answerVideoCall(callId) {
+ if (!currentUser || !activeChatId || peer) return;
+ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  return status("Video call ke liye browser permission aur HTTPS zaroori hai.");
+ }
+ try {
+  const ref = doc(db,"chats",activeChatId,"calls",callId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Call ab available nahi hai.");
+  const data = snap.data();
+  if (data.calleeId !== currentUser.uid || !data.offer) throw new Error("Ye call tumhare liye nahi hai.");
+  status("Camera/microphone permission allow karo...");
+  await preparePeer(ref,"callee");
+  await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+  remoteDescriptionSet = true;
+  watchRemoteCandidates(ref,"callerCandidates");
+  const answer = await peer.createAnswer();
+  await peer.setLocalDescription(answer);
+  await updateDoc(ref,{answer:{type:answer.type,sdp:answer.sdp},status:"active"});
+  $("acceptCall").classList.add("hidden");
+  status("Video call connected.");
+ } catch(e) {
+  await endVideoCall(false);
+  status("Answer call error: " + e.message);
+ }
+}
+
+function watchIncomingCalls() {
+ if (incomingCallsUnsub || !activeChatId || !currentUser) return;
+ incomingCallsUnsub = onSnapshot(collection(db,"chats",activeChatId,"calls"),snap => {
+  const incoming = snap.docs.find(d => {
+   const x = d.data();
+   return x.calleeId === currentUser.uid && x.status === "ringing";
+  });
+  if (incoming && !peer) {
+   $("acceptCall").classList.remove("hidden");
+   $("acceptCall").textContent = "📞 Answer Incoming Call";
+   $("acceptCall").onclick = () => answerVideoCall(incoming.id);
+   status("Incoming video call! Answer Call dabao.");
+  } else if (!peer) {
+   $("acceptCall").classList.add("hidden");
+  }
+ },err => status("Incoming call error: " + err.message));
 }
 
 function makeUserRow(profile, uid) {
@@ -382,6 +562,9 @@ async function openChat(otherUid,otherName) {
    status("Messages error: " + err.message);
   });
 
+  watchIncomingCalls();
+  $("startCall").onclick = startVideoCall;
+  $("endCall").onclick = () => endVideoCall(true);
   $("messageInput").focus();
 
  } catch(e) {
