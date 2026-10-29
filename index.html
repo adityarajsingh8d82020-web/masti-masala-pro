@@ -9,21 +9,21 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#100e19;color:#fff;font-family:Arial,sans-serif}
-header{background:#211a36;padding:18px;font-size:22px;font-weight:bold}
+header{background:#211a36;padding:18px;font-size:25px;font-weight:bold}
 header span{color:#ff70bb}
 main{max-width:600px;margin:auto;padding:16px}
-.card{background:#201c30;border:1px solid #39314d;border-radius:16px;padding:16px;margin:12px 0}
-h2{font-size:19px;margin-top:4px}
-input,textarea,button{width:100%;padding:13px;margin:6px 0;border-radius:10px;border:1px solid #49405e;font-size:15px}
+.card{background:#201c30;border:1px solid #39314d;border-radius:18px;padding:18px;margin:14px 0}
+h2{font-size:22px;margin-top:4px}
+input,textarea,button{width:100%;padding:14px;margin:7px 0;border-radius:12px;border:1px solid #49405e;font-size:16px}
 input,textarea{background:#151220;color:white}
 button{background:#ff70bb;color:#241027;font-weight:bold;border:0;cursor:pointer}
 button.secondary{background:#39314d;color:white}
 button:disabled{opacity:.5}
-.small{font-size:13px;color:#c2bbd2}
+.small{font-size:14px;color:#c2bbd2}
 #status{padding:10px;color:#ffb5da;overflow-wrap:anywhere}
 .user{display:flex;align-items:center;gap:10px}
-.avatar{width:42px;height:42px;flex-shrink:0;border-radius:50%;background:#ff70bb;color:#241027;display:grid;place-items:center;font-weight:bold}
-.user button{margin-left:auto;width:auto}
+.avatar{width:44px;height:44px;flex-shrink:0;border-radius:50%;background:#ff70bb;color:#241027;display:grid;place-items:center;font-weight:bold}
+.user button{width:auto;margin-left:auto}
 #messages{height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
 .msg{background:#39314d;padding:10px 12px;border-radius:12px;max-width:85%;overflow-wrap:anywhere}
 .msg.mine{align-self:flex-end;background:#a84c88}
@@ -81,14 +81,19 @@ button:disabled{opacity:.5}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+
 import {
- getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
- onAuthStateChanged, signOut, updateProfile
+ getAuth, createUserWithEmailAndPassword,
+ signInWithEmailAndPassword, onAuthStateChanged,
+ signOut, updateProfile
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+
 import {
- getFirestore, doc, getDoc, setDoc, collection, query, where,
- onSnapshot, addDoc, updateDoc, serverTimestamp, orderBy
+ getFirestore, doc, getDoc, setDoc,
+ collection, query, where, onSnapshot,
+ addDoc, updateDoc, serverTimestamp, orderBy
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
@@ -96,34 +101,72 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const $ = id => document.getElementById(id);
+
 let currentUser = null;
-let peopleUnsub = null, chatsUnsub = null, messagesUnsub = null;
+let peopleUnsub = null;
+let chatsUnsub = null;
+let messagesUnsub = null;
 let activeChatId = null;
 let activeOther = null;
 let busy = false;
 
-function status(text) { $("status").textContent = text; }
-function show(id, yes) { $(id).classList.toggle("hidden", !yes); }
-function safeText(text) { return String(text ?? ""); }
-function chatIdFor(a,b) { return [a,b].sort().join("__"); }
+function status(text) {
+ $("status").textContent = text;
+}
+
+function show(id, yes) {
+ $(id).classList.toggle("hidden", !yes);
+}
+
+function chatIdFor(a,b) {
+ return [a,b].sort().join("__");
+}
+
+function stopListeners() {
+ if (peopleUnsub) peopleUnsub();
+ if (chatsUnsub) chatsUnsub();
+ if (messagesUnsub) messagesUnsub();
+
+ peopleUnsub = null;
+ chatsUnsub = null;
+ messagesUnsub = null;
+}
+
+function closeChat() {
+ if (messagesUnsub) messagesUnsub();
+ messagesUnsub = null;
+ activeChatId = null;
+ activeOther = null;
+ $("messages").replaceChildren();
+ show("chatBox",false);
+}
 
 function makeUserRow(profile, uid) {
  const wrap = document.createElement("div");
  wrap.className = "card user";
+
  const avatar = document.createElement("div");
  avatar.className = "avatar";
  avatar.textContent = (profile.displayName || "?").slice(0,1).toUpperCase();
+
  const details = document.createElement("div");
  details.style.flex = "1";
+
  const name = document.createElement("strong");
  name.textContent = profile.displayName || "Member";
+
  const bio = document.createElement("div");
  bio.className = "small";
  bio.textContent = profile.bio || "Masti Masala member";
+
  details.append(name,bio);
+
  const button = document.createElement("button");
  button.textContent = "Chat";
- button.addEventListener("click", () => openChat(uid, profile.displayName || "Member"));
+ button.addEventListener("click", () => {
+  openChat(uid, profile.displayName || "Member");
+ });
+
  wrap.append(avatar,details,button);
  return wrap;
 }
@@ -131,57 +174,90 @@ function makeUserRow(profile, uid) {
 function makeChatRow(chat) {
  const otherUid = chat.participants.find(id => id !== currentUser.uid);
  if (!otherUid) return null;
+
  const wrap = document.createElement("div");
  wrap.className = "card user";
+
  const details = document.createElement("div");
  details.style.flex = "1";
+
  const name = document.createElement("strong");
  name.textContent = chat.otherName || "Chat member";
+
  const last = document.createElement("div");
  last.className = "small";
  last.textContent = chat.lastMessage || "Start chatting";
+
  details.append(name,last);
+
  const button = document.createElement("button");
  button.textContent = "Open";
- button.addEventListener("click", () => openChat(otherUid, chat.otherName || "Chat member"));
+ button.addEventListener("click", () => {
+  openChat(otherUid,chat.otherName || "Chat member");
+ });
+
  wrap.append(details,button);
  return wrap;
 }
 
 function loadPeople() {
  if (peopleUnsub) peopleUnsub();
- peopleUnsub = onSnapshot(collection(db,"publicProfiles"), snap => {
-  const root = $("people");
-  root.replaceChildren();
-  let count = 0;
-  snap.forEach(item => {
-   if (item.id === currentUser.uid) return;
-   root.appendChild(makeUserRow(item.data(), item.id));
-   count++;
-  });
-  if (!count) root.textContent = "Abhi koi doosra account nahi mila. Doosre account se sign in karke profile save karo.";
- }, err => status("Profiles load error: " + err.message));
+
+ peopleUnsub = onSnapshot(
+  collection(db,"publicProfiles"),
+  snap => {
+   const root = $("people");
+   root.replaceChildren();
+   let count = 0;
+
+   snap.forEach(item => {
+    if (item.id === currentUser.uid) return;
+    root.appendChild(makeUserRow(item.data(),item.id));
+    count++;
+   });
+
+   if (!count) {
+    root.textContent =
+     "Abhi koi doosra account nahi mila. Doosre account se sign in karke profile save karo.";
+   }
+  },
+  err => status("Profiles load error: " + err.message)
+ );
 }
 
 function loadChats() {
  if (chatsUnsub) chatsUnsub();
- const q = query(collection(db,"chats"),where("participants","array-contains",currentUser.uid));
+
+ const q = query(
+  collection(db,"chats"),
+  where("participants","array-contains",currentUser.uid)
+ );
+
  chatsUnsub = onSnapshot(q, async snap => {
   const root = $("chatList");
   root.replaceChildren();
+
   if (snap.empty) {
    root.textContent = "Abhi koi chat nahi hai. People mein kisi account ko select karo.";
    return;
   }
+
   for (const item of snap.docs) {
    const data = item.data();
-   const otherUid = (data.participants || []).find(id => id !== currentUser.uid);
+   const otherUid = (data.participants || [])
+    .find(id => id !== currentUser.uid);
+
    if (!otherUid) continue;
+
    let name = "Member";
+
    try {
     const p = await getDoc(doc(db,"publicProfiles",otherUid));
     if (p.exists()) name = p.data().displayName || name;
-   } catch {}
+   } catch(e) {
+    console.warn("Profile lookup:",e.message);
+   }
+
    const row = makeChatRow({...data,otherName:name});
    if (row) root.appendChild(row);
   }
@@ -191,157 +267,243 @@ function loadChats() {
 async function syncPublicProfile() {
  const ref = doc(db,"publicProfiles",currentUser.uid);
  const privateRef = doc(db,"users",currentUser.uid);
+
  const privateSnap = await getDoc(privateRef);
  const existing = await getDoc(ref);
+
  const name = currentUser.displayName ||
   (privateSnap.exists() && privateSnap.data().displayName) ||
   (existing.exists() && existing.data().displayName) || "Member";
+
  const bio = (privateSnap.exists() && privateSnap.data().bio) ||
   (existing.exists() && existing.data().bio) || "";
+
  $("displayName").value = name;
  $("bio").value = bio;
+
  await setDoc(ref,{
-  displayName:name.slice(0,40),bio:String(bio).slice(0,120),
+  displayName:name.slice(0,40),
+  bio:String(bio).slice(0,120),
   updatedAt:serverTimestamp()
  });
 }
 
 async function saveProfile() {
+ if (!currentUser) return;
+
  const name = $("displayName").value.trim();
  const bio = $("bio").value.trim();
+
  if (!name) return status("Display name likho.");
+
  try {
   await updateProfile(currentUser,{displayName:name});
+
   await setDoc(doc(db,"users",currentUser.uid),{
-   displayName:name,bio,email:currentUser.email || "",
+   displayName:name,
+   bio,
+   email:currentUser.email || "",
    updatedAt:serverTimestamp()
   },{merge:true});
+
   await setDoc(doc(db,"publicProfiles",currentUser.uid),{
-   displayName:name,bio,updatedAt:serverTimestamp()
+   displayName:name,
+   bio,
+   updatedAt:serverTimestamp()
   });
+
   status("Profile save ho gayi!");
- } catch(e) { status("Profile save error: " + e.message); }
+ } catch(e) {
+  status("Profile save error: " + e.message);
+ }
 }
 
-async function openChat(otherUid, otherName) {
-  if (otherUid === currentUser.uid) return;
+async function openChat(otherUid,otherName) {
+ if (!currentUser || otherUid === currentUser.uid) return;
 
-  try {
-    const id = chatIdFor(currentUser.uid, otherUid);
-    const ref = doc(db, "chats", id);
+ closeChat();
 
-    await setDoc(ref, {
-      participants: [currentUser.uid, otherUid],
-      lastMessage: "",
-      lastMessageAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+ try {
+  const id = chatIdFor(currentUser.uid,otherUid);
+  const ref = doc(db,"chats",id);
 
-    activeChatId = id;
-    activeOther = { uid: otherUid, name: otherName };
+  // Existing chat ko overwrite nahi karna.
+  const existing = await getDoc(ref);
 
-    $("chatTitle").textContent = "Chat with " + otherName;
-    show("chatBox", true);
+  if (!existing.exists()) {
+   const participants = [currentUser.uid,otherUid].sort();
 
-    if (messagesUnsub) messagesUnsub();
+   await setDoc(ref,{
+    participants,
+    lastMessage:"",
+    lastMessageAt:serverTimestamp(),
+    updatedAt:serverTimestamp()
+   });
+  } else {
+   const data = existing.data();
 
-    const mq = query(
-      collection(db, "chats", id, "messages"),
-      orderBy("createdAt", "asc")
-    );
-
-    messagesUnsub = onSnapshot(mq, snap => {
-      const root = $("messages");
-      root.replaceChildren();
-
-      snap.forEach(item => {
-        const m = item.data();
-        const bubble = document.createElement("div");
-        bubble.className =
-          "msg" + (m.senderId === currentUser.uid ? " mine" : "");
-        bubble.textContent = m.text || "";
-        root.appendChild(bubble);
-      });
-
-      root.scrollTop = root.scrollHeight;
-    }, err => status("Messages error: " + err.message));
-
-    $("messageInput").focus();
-
-  } catch (e) {
-    status("Chat open error: " + e.message);
+   if (
+    !Array.isArray(data.participants) ||
+    !data.participants.includes(currentUser.uid) ||
+    !data.participants.includes(otherUid)
+   ) {
+    throw new Error("Chat participants match nahi kar rahe.");
+   }
   }
+
+  activeChatId = id;
+  activeOther = {uid:otherUid,name:otherName};
+
+  $("chatTitle").textContent = "Chat with " + otherName;
+  show("chatBox",true);
+
+  const mq = query(
+   collection(db,"chats",id,"messages"),
+   orderBy("createdAt","asc")
+  );
+
+  messagesUnsub = onSnapshot(mq,snap => {
+   const root = $("messages");
+   root.replaceChildren();
+
+   snap.forEach(item => {
+    const m = item.data();
+    const bubble = document.createElement("div");
+
+    bubble.className =
+     "msg" + (m.senderId === currentUser.uid ? " mine" : "");
+
+    bubble.textContent = m.text || "";
+    root.appendChild(bubble);
+   });
+
+   root.scrollTop = root.scrollHeight;
+  },err => {
+   status("Messages error: " + err.message);
+  });
+
+  $("messageInput").focus();
+
+ } catch(e) {
+  closeChat();
+  status("Chat open error: " + e.message);
+ }
 }
-$("signup").addEventListener("click",async()=>{
+
+$("signup").addEventListener("click",async () => {
  if (busy) return;
- const email = $("email").value.trim(), password = $("password").value;
- if (!email || password.length < 6) return status("Email aur minimum 6-character password daalo.");
+
+ const email = $("email").value.trim();
+ const password = $("password").value;
+
+ if (!email || password.length < 6) {
+  return status("Email aur minimum 6-character password daalo.");
+ }
+
  busy = true;
+
  try {
   await createUserWithEmailAndPassword(auth,email,password);
   status("Account created!");
- } catch(e) { status("Sign-up error: " + e.message); }
- finally { busy = false; }
+ } catch(e) {
+  status("Sign-up error: " + e.message);
+ } finally {
+  busy = false;
+ }
 });
 
-$("login").addEventListener("click",async()=>{
+$("login").addEventListener("click",async () => {
  if (busy) return;
+
  busy = true;
+
  try {
-  await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);
+  await signInWithEmailAndPassword(
+   auth,$("email").value.trim(),$("password").value
+  );
   status("Signed in!");
- } catch(e) { status("Login error: " + e.message); }
- finally { busy = false; }
+ } catch(e) {
+  status("Login error: " + e.message);
+ } finally {
+  busy = false;
+ }
 });
 
 $("saveProfile").addEventListener("click",saveProfile);
-$("logout").addEventListener("click",()=>signOut(auth));
-$("closeChat").addEventListener("click",()=>{
- if (messagesUnsub) messagesUnsub();
- messagesUnsub = null;
- activeChatId = null;
- activeOther = null;
- show("chatBox",false);
-});
-$("messageForm").addEventListener("submit",async e=>{
+$("logout").addEventListener("click",() => signOut(auth));
+$("closeChat").addEventListener("click",closeChat);
+
+$("messageForm").addEventListener("submit",async e => {
  e.preventDefault();
- if (!activeChatId || !activeOther) return;
+
+ if (!currentUser || !activeChatId || !activeOther) return;
+
  const text = $("messageInput").value.trim();
  if (!text) return;
+
  const button = $("messageForm").querySelector("button");
  button.disabled = true;
+
  try {
   const chatRef = doc(db,"chats",activeChatId);
   const chatSnap = await getDoc(chatRef);
-  if (!chatSnap.exists()) throw new Error("Chat nahi mila. Dobara open karo.");
+
+  if (!chatSnap.exists()) {
+   throw new Error("Chat nahi mila. Dobara open karo.");
+  }
+
+  const participants = chatSnap.data().participants || [];
+
+  if (
+   !participants.includes(currentUser.uid) ||
+   !participants.includes(activeOther.uid)
+  ) {
+   throw new Error("Is chat ko access karne ki permission nahi hai.");
+  }
+
   await addDoc(collection(db,"chats",activeChatId,"messages"),{
-   senderId:currentUser.uid,text,createdAt:serverTimestamp()
+   senderId:currentUser.uid,
+   text,
+   createdAt:serverTimestamp()
   });
+
   await updateDoc(chatRef,{
-   lastMessage:text,lastMessageAt:serverTimestamp(),updatedAt:serverTimestamp()
+   lastMessage:text,
+   lastMessageAt:serverTimestamp(),
+   updatedAt:serverTimestamp()
   });
+
   $("messageInput").value = "";
- } catch(e) { status("Message send error: " + e.message); }
- finally { button.disabled = false; }
+ } catch(e) {
+  status("Message send error: " + e.message);
+ } finally {
+  button.disabled = false;
+ }
 });
 
-onAuthStateChanged(auth,async user=>{
+onAuthStateChanged(auth,async user => {
+ stopListeners();
+ closeChat();
+
  currentUser = user;
- if (peopleUnsub) peopleUnsub();
- if (chatsUnsub) chatsUnsub();
- if (messagesUnsub) messagesUnsub();
- peopleUnsub = chatsUnsub = messagesUnsub = null;
+
  show("auth",!user);
  show("app",!!user);
- show("chatBox",false);
- if (!user) { status("Sign in ya account create karo."); return; }
+
+ if (!user) {
+  status("Sign in ya account create karo.");
+  return;
+ }
+
  try {
   status("Profile load ho raha hai...");
   await syncPublicProfile();
   loadPeople();
   loadChats();
   status("Welcome, " + (user.displayName || user.email) + "!");
- } catch(e) { status("Account setup error: " + e.message); }
+ } catch(e) {
+  status("Account setup error: " + e.message);
+ }
 });
 </script>
 </body>
