@@ -239,17 +239,11 @@ async function startVideoCall() {
  try {
   status("Camera/microphone permission allow karo...");
   const ref = doc(collection(db,"chats",activeChatId,"calls"));
+  await setDoc(ref,{callerId:currentUser.uid,calleeId:activeOther.uid,participants:[currentUser.uid,activeOther.uid],status:"preparing",createdAt:serverTimestamp()});
   await preparePeer(ref,"caller");
   const offer = await peer.createOffer();
   await peer.setLocalDescription(offer);
-  await setDoc(ref,{
-   callerId:currentUser.uid,
-   calleeId:activeOther.uid,
-   participants:[currentUser.uid,activeOther.uid],
-   offer:{type:offer.type,sdp:offer.sdp},
-   status:"ringing",
-   createdAt:serverTimestamp()
-  });
+  await updateDoc(ref,{offer:{type:offer.type,sdp:offer.sdp},status:"ringing"});
   $("acceptCall").classList.add("hidden");
   callDocUnsub = onSnapshot(ref,async snap => {
    if (!snap.exists()) return;
