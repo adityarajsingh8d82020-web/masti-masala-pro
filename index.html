@@ -1,64 +1,335 @@
 
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#171326">
+<title>Masti Masala Pro</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#100e19;color:#fff;font-family:Arial,sans-serif}
+header{background:#211a36;padding:18px;font-size:22px;font-weight:bold}
+header span{color:#ff70bb}
+main{max-width:600px;margin:auto;padding:16px}
+.card{background:#201c30;border:1px solid #39314d;border-radius:16px;padding:16px;margin:12px 0}
+h2{font-size:19px;margin-top:4px}
+input,textarea,button{width:100%;padding:13px;margin:6px 0;border-radius:10px;border:1px solid #49405e;font-size:15px}
+input,textarea{background:#151220;color:white}
+button{background:#ff70bb;color:#241027;font-weight:bold;border:0;cursor:pointer}
+button.secondary{background:#39314d;color:white}
+button:disabled{opacity:.5}
+.small{font-size:13px;color:#c2bbd2}
+#status{padding:10px;color:#ffb5da;overflow-wrap:anywhere}
+.user{display:flex;align-items:center;gap:10px}
+.avatar{width:42px;height:42px;flex-shrink:0;border-radius:50%;background:#ff70bb;color:#241027;display:grid;place-items:center;font-weight:bold}
+.user button{margin-left:auto;width:auto}
+#messages{height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.msg{background:#39314d;padding:10px 12px;border-radius:12px;max-width:85%;overflow-wrap:anywhere}
+.msg.mine{align-self:flex-end;background:#a84c88}
+.hidden{display:none!important}
+.row{display:flex;gap:8px;align-items:center}
+.row input{flex:1;min-width:0}
+.row button{width:auto;min-width:78px}
+</style>
+</head>
+<body>
+<header>🌶️ Masti <span>Masala Pro</span></header>
+<main>
+<div id="status">App loading...</div>
 
-    match /users/{userId} {
-      allow read, create, update, delete:
-        if request.auth != null
-        && request.auth.uid == userId;
-    }
+<section id="auth" class="card hidden">
+<h2>Welcome to Masti Masala</h2>
+<p class="small">Create an account or sign in.</p>
+<input id="email" type="email" placeholder="Email address" autocomplete="email">
+<input id="password" type="password" placeholder="Password (minimum 6 characters)" autocomplete="current-password">
+<button id="signup">Create Account</button>
+<button id="login" class="secondary">Sign In</button>
+</section>
 
-    match /publicProfiles/{userId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly([
-          'displayName', 'bio', 'updatedAt'
-        ])
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() <= 40
-        && request.resource.data.bio is string
-        && request.resource.data.bio.size() <= 120;
-      allow delete: if false;
-    }
+<section id="app" class="hidden">
+<div class="card">
+<h2>Your Profile</h2>
+<input id="displayName" maxlength="40" placeholder="Your display name">
+<textarea id="bio" maxlength="120" placeholder="About you (max 120 characters)"></textarea>
+<button id="saveProfile">Save Profile</button>
+<button id="logout" class="secondary">Sign Out</button>
+</div>
 
-    match /chats/{chatId} {
-      allow create: if request.auth != null
-        && request.resource.data.participants is list
-        && request.resource.data.participants.size() == 2
-        && request.auth.uid in request.resource.data.participants;
+<div class="card">
+<h2>People</h2>
+<p class="small">Select another registered account to start a chat.</p>
+<div id="people">Loading profiles...</div>
+</div>
 
-      allow read: if request.auth != null
-        && request.auth.uid in resource.data.participants;
+<div class="card">
+<h2>Your Chats</h2>
+<div id="chatList">No chats yet.</div>
+</div>
 
-      allow update: if request.auth != null
-        && request.auth.uid in resource.data.participants
-        && request.resource.data.participants == resource.data.participants
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt']);
+<div id="chatBox" class="card hidden">
+<h2 id="chatTitle">Chat</h2>
+<div id="messages"></div>
+<form id="messageForm" class="row">
+<input id="messageInput" maxlength="1000" placeholder="Write a message..." autocomplete="off" required>
+<button type="submit">Send</button>
+</form>
+<button id="closeChat" class="secondary">Close Chat</button>
+</div>
+</section>
+</main>
 
-      allow delete: if false;
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import {
+ getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+ onAuthStateChanged, signOut, updateProfile
+} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+import {
+ getFirestore, doc, getDoc, setDoc, collection, query, where,
+ onSnapshot, addDoc, updateDoc, serverTimestamp, orderBy
+} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
 
-      match /messages/{messageId} {
-        function isParticipant() {
-          return request.auth != null
-            && request.auth.uid in
-              get(/databases/$(database)/documents/chats/$(chatId))
-                .data.participants;
-        }
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-        allow read: if isParticipant();
+const $ = id => document.getElementById(id);
+let currentUser = null;
+let peopleUnsub = null, chatsUnsub = null, messagesUnsub = null;
+let activeChatId = null;
+let activeOther = null;
+let busy = false;
 
-        allow create: if isParticipant()
-          && request.resource.data.senderId == request.auth.uid
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 1000
-          && request.resource.data.createdAt == request.time;
+function status(text) { $("status").textContent = text; }
+function show(id, yes) { $(id).classList.toggle("hidden", !yes); }
+function safeText(text) { return String(text ?? ""); }
+function chatIdFor(a,b) { return [a,b].sort().join("__"); }
 
-        allow update, delete: if false;
-      }
-    }
-  }
+function makeUserRow(profile, uid) {
+ const wrap = document.createElement("div");
+ wrap.className = "card user";
+ const avatar = document.createElement("div");
+ avatar.className = "avatar";
+ avatar.textContent = (profile.displayName || "?").slice(0,1).toUpperCase();
+ const details = document.createElement("div");
+ details.style.flex = "1";
+ const name = document.createElement("strong");
+ name.textContent = profile.displayName || "Member";
+ const bio = document.createElement("div");
+ bio.className = "small";
+ bio.textContent = profile.bio || "Masti Masala member";
+ details.append(name,bio);
+ const button = document.createElement("button");
+ button.textContent = "Chat";
+ button.addEventListener("click", () => openChat(uid, profile.displayName || "Member"));
+ wrap.append(avatar,details,button);
+ return wrap;
 }
+
+function makeChatRow(chat) {
+ const otherUid = chat.participants.find(id => id !== currentUser.uid);
+ if (!otherUid) return null;
+ const wrap = document.createElement("div");
+ wrap.className = "card user";
+ const details = document.createElement("div");
+ details.style.flex = "1";
+ const name = document.createElement("strong");
+ name.textContent = chat.otherName || "Chat member";
+ const last = document.createElement("div");
+ last.className = "small";
+ last.textContent = chat.lastMessage || "Start chatting";
+ details.append(name,last);
+ const button = document.createElement("button");
+ button.textContent = "Open";
+ button.addEventListener("click", () => openChat(otherUid, chat.otherName || "Chat member"));
+ wrap.append(details,button);
+ return wrap;
+}
+
+function loadPeople() {
+ if (peopleUnsub) peopleUnsub();
+ peopleUnsub = onSnapshot(collection(db,"publicProfiles"), snap => {
+  const root = $("people");
+  root.replaceChildren();
+  let count = 0;
+  snap.forEach(item => {
+   if (item.id === currentUser.uid) return;
+   root.appendChild(makeUserRow(item.data(), item.id));
+   count++;
+  });
+  if (!count) root.textContent = "Abhi koi doosra account nahi mila. Doosre account se sign in karke profile save karo.";
+ }, err => status("Profiles load error: " + err.message));
+}
+
+function loadChats() {
+ if (chatsUnsub) chatsUnsub();
+ const q = query(collection(db,"chats"),where("participants","array-contains",currentUser.uid));
+ chatsUnsub = onSnapshot(q, async snap => {
+  const root = $("chatList");
+  root.replaceChildren();
+  if (snap.empty) {
+   root.textContent = "Abhi koi chat nahi hai. People mein kisi account ko select karo.";
+   return;
+  }
+  for (const item of snap.docs) {
+   const data = item.data();
+   const otherUid = (data.participants || []).find(id => id !== currentUser.uid);
+   if (!otherUid) continue;
+   let name = "Member";
+   try {
+    const p = await getDoc(doc(db,"publicProfiles",otherUid));
+    if (p.exists()) name = p.data().displayName || name;
+   } catch {}
+   const row = makeChatRow({...data,otherName:name});
+   if (row) root.appendChild(row);
+  }
+ }, err => status("Chats load error: " + err.message));
+}
+
+async function syncPublicProfile() {
+ const ref = doc(db,"publicProfiles",currentUser.uid);
+ const privateRef = doc(db,"users",currentUser.uid);
+ const privateSnap = await getDoc(privateRef);
+ const existing = await getDoc(ref);
+ const name = currentUser.displayName ||
+  (privateSnap.exists() && privateSnap.data().displayName) ||
+  (existing.exists() && existing.data().displayName) || "Member";
+ const bio = (privateSnap.exists() && privateSnap.data().bio) ||
+  (existing.exists() && existing.data().bio) || "";
+ $("displayName").value = name;
+ $("bio").value = bio;
+ await setDoc(ref,{
+  displayName:name.slice(0,40),bio:String(bio).slice(0,120),
+  updatedAt:serverTimestamp()
+ });
+}
+
+async function saveProfile() {
+ const name = $("displayName").value.trim();
+ const bio = $("bio").value.trim();
+ if (!name) return status("Display name likho.");
+ try {
+  await updateProfile(currentUser,{displayName:name});
+  await setDoc(doc(db,"users",currentUser.uid),{
+   displayName:name,bio,email:currentUser.email || "",
+   updatedAt:serverTimestamp()
+  },{merge:true});
+  await setDoc(doc(db,"publicProfiles",currentUser.uid),{
+   displayName:name,bio,updatedAt:serverTimestamp()
+  });
+  status("Profile save ho gayi!");
+ } catch(e) { status("Profile save error: " + e.message); }
+}
+
+async function openChat(otherUid, otherName) {
+ if (otherUid === currentUser.uid) return;
+ try {
+  const id = chatIdFor(currentUser.uid,otherUid);
+  const ref = doc(db,"chats",id);
+  const existing = await getDoc(ref);
+  if (!existing.exists()) {
+   await setDoc(ref,{
+    participants:[currentUser.uid,otherUid],
+    lastMessage:"",
+    lastMessageAt:serverTimestamp(),
+    updatedAt:serverTimestamp()
+   });
+  }
+  activeChatId = id;
+  activeOther = {uid:otherUid,name:otherName};
+  $("chatTitle").textContent = "Chat with " + otherName;
+  show("chatBox",true);
+  if (messagesUnsub) messagesUnsub();
+  const mq = query(collection(db,"chats",id,"messages"),orderBy("createdAt","asc"));
+  messagesUnsub = onSnapshot(mq,snap => {
+   const root = $("messages");
+   root.replaceChildren();
+   snap.forEach(item => {
+    const m = item.data();
+    const bubble = document.createElement("div");
+    bubble.className = "msg" + (m.senderId === currentUser.uid ? " mine" : "");
+    bubble.textContent = m.text || "";
+    root.appendChild(bubble);
+   });
+   root.scrollTop = root.scrollHeight;
+  },err => status("Messages error: " + err.message));
+  $("messageInput").focus();
+ } catch(e) { status("Chat open error: " + e.message); }
+}
+
+$("signup").addEventListener("click",async()=>{
+ if (busy) return;
+ const email = $("email").value.trim(), password = $("password").value;
+ if (!email || password.length < 6) return status("Email aur minimum 6-character password daalo.");
+ busy = true;
+ try {
+  await createUserWithEmailAndPassword(auth,email,password);
+  status("Account created!");
+ } catch(e) { status("Sign-up error: " + e.message); }
+ finally { busy = false; }
+});
+
+$("login").addEventListener("click",async()=>{
+ if (busy) return;
+ busy = true;
+ try {
+  await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);
+  status("Signed in!");
+ } catch(e) { status("Login error: " + e.message); }
+ finally { busy = false; }
+});
+
+$("saveProfile").addEventListener("click",saveProfile);
+$("logout").addEventListener("click",()=>signOut(auth));
+$("closeChat").addEventListener("click",()=>{
+ if (messagesUnsub) messagesUnsub();
+ messagesUnsub = null;
+ activeChatId = null;
+ activeOther = null;
+ show("chatBox",false);
+});
+$("messageForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ if (!activeChatId || !activeOther) return;
+ const text = $("messageInput").value.trim();
+ if (!text) return;
+ const button = $("messageForm").querySelector("button");
+ button.disabled = true;
+ try {
+  const chatRef = doc(db,"chats",activeChatId);
+  const chatSnap = await getDoc(chatRef);
+  if (!chatSnap.exists()) throw new Error("Chat nahi mila. Dobara open karo.");
+  await addDoc(collection(db,"chats",activeChatId,"messages"),{
+   senderId:currentUser.uid,text,createdAt:serverTimestamp()
+  });
+  await updateDoc(chatRef,{
+   lastMessage:text,lastMessageAt:serverTimestamp(),updatedAt:serverTimestamp()
+  });
+  $("messageInput").value = "";
+ } catch(e) { status("Message send error: " + e.message); }
+ finally { button.disabled = false; }
+});
+
+onAuthStateChanged(auth,async user=>{
+ currentUser = user;
+ if (peopleUnsub) peopleUnsub();
+ if (chatsUnsub) chatsUnsub();
+ if (messagesUnsub) messagesUnsub();
+ peopleUnsub = chatsUnsub = messagesUnsub = null;
+ show("auth",!user);
+ show("app",!!user);
+ show("chatBox",false);
+ if (!user) { status("Sign in ya account create karo."); return; }
+ try {
+  status("Profile load ho raha hai...");
+  await syncPublicProfile();
+  loadPeople();
+  loadChats();
+  status("Welcome, " + (user.displayName || user.email) + "!");
+ } catch(e) { status("Account setup error: " + e.message); }
+});
+</script>
+</body>
+</html>
