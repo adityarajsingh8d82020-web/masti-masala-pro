@@ -13,7 +13,6 @@ import android.webkit.WebSettings
 class MainActivity : Activity() {
     private lateinit var webView: WebView
     private var pendingPermissionRequest: PermissionRequest? = null
-    private var pendingAndroidPermissions = emptyArray<String>()
     private val cameraRequestCode = 701
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,17 +45,13 @@ class MainActivity : Activity() {
                         request.grant(request.resources)
                     } else {
                         pendingPermissionRequest = request
-                        pendingAndroidPermissions = needed.toTypedArray()
-                        requestPermissions(pendingAndroidPermissions, cameraRequestCode)
+                        requestPermissions(needed.toTypedArray(), cameraRequestCode)
                     }
                 }
             }
 
             override fun onPermissionRequestCanceled(request: PermissionRequest) {
-                if (pendingPermissionRequest == request) {
-                    pendingPermissionRequest = null
-                    pendingAndroidPermissions = emptyArray()
-                }
+                if (pendingPermissionRequest == request) pendingPermissionRequest = null
             }
         }
 
@@ -71,18 +66,20 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == cameraRequestCode) {
             val request = pendingPermissionRequest
-            val requested = pendingAndroidPermissions.toList()
             pendingPermissionRequest = null
-            pendingAndroidPermissions = emptyArray()
             if (request != null) {
-                val granted = requested.zip(grantResults.toList())
-                    .filter { it.second == PackageManager.PERMISSION_GRANTED }
-                    .map { pair ->
-                        if (pair.first == Manifest.permission.CAMERA) PermissionRequest.RESOURCE_VIDEO_CAPTURE
-                        else PermissionRequest.RESOURCE_AUDIO_CAPTURE
+                // Grant every WebView resource that Android currently authorizes, including
+                // a permission that had already been granted before this prompt appeared.
+                val allowed = request.resources.filter { resource ->
+                    when (resource) {
+                        PermissionRequest.RESOURCE_VIDEO_CAPTURE ->
+                            checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                        PermissionRequest.RESOURCE_AUDIO_CAPTURE ->
+                            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                        else -> false
                     }
-                    .toTypedArray()
-                if (granted.isNotEmpty()) request.grant(granted) else request.deny()
+                }.toTypedArray()
+                if (allowed.isNotEmpty()) request.grant(allowed) else request.deny()
             }
         }
     }
