@@ -271,10 +271,20 @@ async function startVideoCall() {
 }
 
 async function answerVideoCall(callId) {
- if (!currentUser || !activeChatId || peer) return;
+ if (!currentUser || !activeChatId) {
+  status("Pehle chat open karo, phir call answer karo.");
+  return;
+ }
+ if (peer) {
+  status("Is phone par pehle se call active hai. End Call dabakar dobara try karo.");
+  return;
+ }
  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
   return status("Video call ke liye browser permission aur HTTPS zaroori hai.");
  }
+ const answerButton = $("acceptCall");
+ answerButton.disabled = true;
+ status("Answer button dabaya gaya. Call details check ho rahi hain...");
  try {
   const ref = doc(db,"chats",activeChatId,"calls",callId);
   const snap = await getDoc(ref);
@@ -294,6 +304,8 @@ async function answerVideoCall(callId) {
  } catch(e) {
   await endVideoCall(false);
   status("Answer call error: " + e.message);
+ } finally {
+  answerButton.disabled = false;
  }
 }
 
